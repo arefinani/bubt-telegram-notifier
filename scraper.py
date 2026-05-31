@@ -2,6 +2,7 @@ import requests
 import json, os
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
@@ -14,11 +15,14 @@ def get_notices():
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.binary_location = "/usr/bin/chromium-browser"
+
+    service = Service("/usr/bin/chromedriver")
+    driver = webdriver.Chrome(service=service, options=options)
     
-    driver = webdriver.Chrome(options=options)
     driver.get("https://www.bubt.edu.bd/notice")
     
-    # Wait for notices to load
     WebDriverWait(driver, 15).until(
         EC.presence_of_element_located((By.TAG_NAME, "table"))
     )
