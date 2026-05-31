@@ -5,6 +5,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+import fitz
 
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
@@ -20,17 +21,16 @@ def get_notices():
 
     service = Service("/usr/bin/chromedriver")
     driver = webdriver.Chrome(service=service, options=options)
-    
     driver.get("https://www.bubt.edu.bd/notice")
-    
+
     WebDriverWait(driver, 15).until(
         EC.presence_of_element_located((By.TAG_NAME, "table"))
     )
-    
+
     notices = []
     rows = driver.find_elements(By.CSS_SELECTOR, "table tr")
     print(f"Found {len(rows)} rows")
-    
+
     for row in rows:
         try:
             title = row.find_element(By.CSS_SELECTOR, "td:nth-child(2)").text.strip()
@@ -40,29 +40,41 @@ def get_notices():
                 print(f"Notice: {title[:60]}")
         except:
             continue
-    
+
     driver.quit()
     return notices[:10]
 
-def send_telegram(message):
-    r = requests.post(
-        f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-        json={"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"}
-    )
-    print("Telegram:", r.status_code)
+def pdf_to_images(pdf_bytes):
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    images = []
+    for page in doc:
+        pix = page.get_pixmap(dpi=150)
+        images.append(pix.tobytes("png"))
+    return images
 
-def send_pdf(pdf_url, caption):
+def send_notice_as_images(pdf_url, title):
     try:
-        pdf = requests.get(pdf_url, timeout=15)
-        r = requests.post(
-            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument",
-            data={"chat_id": CHAT_ID, "caption": caption},
-            files={"document": ("notice.pdf", pdf.content, "application/pdf")}
-        )
-        print("PDF sent:", r.status_code)
+        response = requests.get(pdf_url, timeout=15)
+        images = pdf_to_images(response.content)
+        print(f"PDF has {len(images)} pages")
+
+        for i, img_bytes in enumerate(images):
+            caption = f"🔔 {title}" if i == 0 else f"📄 Page {i+1}"
+            r = requests.post(
+                f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto",
+                data={"chat_id": CHAT_ID, "caption": caption},
+                files={"photo": (f"page{i+1}.png", img_bytes, "image/png")}
+            )
+            print(f"Page {i+1} sent:", r.status_code)
+            if r.status_code != 200:
+                print(r.text)
+
     except Exception as e:
-        print("PDF error:", e)
-        send_telegram(f"🔔 <b>{caption}</b>\n\n🔗 {pdf_url}")
+        print("Error:", e)
+        requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+            json={"chat_id": CHAT_ID, "text": f"🔔 <b>{title}</b>\n\n🔗 {pdf_url}", "parse_mode": "HTML"}
+        )
 
 def load_seen():
     if os.path.exists(SEEN_FILE):
@@ -77,7 +89,7 @@ notices = get_notices()
 
 for n in notices:
     if n["url"] not in seen:
-        send_pdf(n["url"], n["title"])
+        send_notice_as_images(n["url"], n["title"])
         seen.add(n["url"])
 
 save_seen(seen)
