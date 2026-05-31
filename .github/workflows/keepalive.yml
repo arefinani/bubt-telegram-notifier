@@ -1,0 +1,23 @@
+name: Keep Alive
+
+on:
+  schedule:
+    - cron: "0 9 1 * *"  # runs 1st of every month at 9am
+  workflow_dispatch:
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Keep alive ping
+        run: |
+          git config user.email "bot@bubt"
+          git config user.name "BUBT Bot"
+          echo "$(date)" > keepalive.txt
+          git add keepalive.txt
+          git commit -m "keepalive ping"
+          git push
