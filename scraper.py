@@ -95,7 +95,7 @@ def send_notice(notice):
         print("Image size: " + str(len(img_bytes)) + " bytes")
         r = requests.post(
             "https://api.telegram.org/bot" + TELEGRAM_TOKEN + "/sendPhoto",
-            data={"chat_id": CHAT_ID, "caption": "New Notice: " + title + "\n\n" + pdf_url},
+            data={"chat_id": CHAT_ID, "caption": "New Notice: " + title + "\n\nLink: " + pdf_url},
             files={"photo": ("notice.png", img_bytes, "image/png")}
         )
         print("Photo sent: " + str(r.status_code))
