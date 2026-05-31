@@ -1,85 +1,47 @@
-import os
 import requests
 from bs4 import BeautifulSoup
+import json, os
 
-TOKEN = os.environ["TELEGRAM_TOKEN"]
+TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+SEEN_FILE = "seen_notices.json"
 
-SEEN_FILE = "seen_notices.txt"
-
-
-def send_telegram(msg):
-    requests.post(
-        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-        json={
-            "chat_id": CHAT_ID,
-            "text": msg,
-            "disable_web_page_preview": False
-        },
-        timeout=20
-    )
-
-
-def get_latest_notice():
+def get_notices():
     url = "https://www.bubt.edu.bd/notice"
-
-    r = requests.get(url, timeout=20)
-    r.raise_for_status()
-
+    r = requests.get(url, timeout=10)
     soup = BeautifulSoup(r.text, "html.parser")
-
+    notices = []
+    # Grab all notice links
     for a in soup.find_all("a", href=True):
+        text = a.get_text(strip=True)
         href = a["href"]
+        if text and "/notice/" in href:
+            full_url = "https://www.bubt.edu.bd" + href if href.startswith("/") else href
+            notices.append({"title": text, "url": full_url})
+    return notices[:10]  # latest 10
 
-        if "/notice/details/" in href:
-            title = a.get_text(strip=True)
-
-            if not title:
-                continue
-
-            if href.startswith("/"):
-                href = "https://www.bubt.edu.bd" + href
-
-            return {
-                "title": title,
-                "url": href
-            }
-
-    return None
-
-
-def read_last():
-    if os.path.exists(SEEN_FILE):
-        return open(SEEN_FILE).read().strip()
-    return ""
-
-
-def save_last(url):
-    with open(SEEN_FILE, "w") as f:
-        f.write(url)
-
-
-latest = get_latest_notice()
-
-if latest is None:
-    print("No notice found")
-    raise SystemExit()
-
-last_url = read_last()
-
-if latest["url"] != last_url:
-
-    message = (
-        f"📢 New BUBT Notice\n\n"
-        f"{latest['title']}\n\n"
-        f"{latest['url']}"
+def send_telegram(message):
+    requests.post(
+        f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+        json={"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"}
     )
 
-    send_telegram(message)
+def load_seen():
+    if os.path.exists(SEEN_FILE):
+        return set(json.load(open(SEEN_FILE)))
+    return set()
 
-    save_last(latest["url"])
+def save_seen(seen):
+    json.dump(list(seen), open(SEEN_FILE, "w"))
 
-    print("New notice sent")
+seen = load_seen()
+notices = get_notices()
+new_found = False
 
-else:
-    print("No new notice")
+for n in notices:
+    if n["url"] not in seen:
+        send_telegram(f"🔔 <b>New BUBT Notice</b>\n\n{n['title']}\n\n🔗 {n['url']}")
+        seen.add(n["url"])
+        new_found = True
+
+save_seen(seen)
