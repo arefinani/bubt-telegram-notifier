@@ -13,7 +13,7 @@ CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 SEEN_FILE = "seen_notices.json"
 
 
-def get_latest_notice():
+def get_latest_notices():
     options = webdriver.ChromeOptions()
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
@@ -28,35 +28,44 @@ def get_latest_notice():
     )
     rows = driver.find_elements(By.CSS_SELECTOR, "table tr")
     print("Total rows found: " + str(len(rows)))
-    notice = None
+
+    notices = []
     for row in rows:
         try:
             title = row.find_element(By.CSS_SELECTOR, "td:nth-child(2)").text.strip()
             eye = row.find_element(By.CSS_SELECTOR, "a")
             detail_url = eye.get_attribute("href")
             if title and detail_url:
-                print("Latest notice: " + title)
-                print("Detail URL: " + detail_url)
-                notice = {"title": title, "detail_url": detail_url}
-                break
+                print("Notice: " + title)
+                notices.append({"title": title, "detail_url": detail_url})
+                if len(notices) == 5:
+                    break
         except Exception as e:
             print("Row error: " + str(e))
             continue
-    if notice:
-        driver.get(notice["detail_url"])
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.TAG_NAME, "body"))
-        )
-        pdf_url = None
-        for a in driver.find_elements(By.TAG_NAME, "a"):
-            href = a.get_attribute("href") or ""
-            if "storage/notices" in href and ".pdf" in href:
-                pdf_url = href
-                print("PDF URL found: " + pdf_url)
-                break
-        notice["pdf_url"] = pdf_url
+
+    result = []
+    for notice in notices:
+        try:
+            driver.get(notice["detail_url"])
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.TAG_NAME, "body"))
+            )
+            pdf_url = None
+            for a in driver.find_elements(By.TAG_NAME, "a"):
+                href = a.get_attribute("href") or ""
+                if "storage/notices" in href and ".pdf" in href:
+                    pdf_url = href
+                    print("PDF URL found: " + pdf_url)
+                    break
+            notice["pdf_url"] = pdf_url
+            result.append(notice)
+        except Exception as e:
+            print("Detail page error: " + str(e))
+            continue
+
     driver.quit()
-    return notice
+    return result
 
 
 def pdf_to_single_image(pdf_bytes):
@@ -95,7 +104,7 @@ def send_notice(notice):
         print("Image size: " + str(len(img_bytes)) + " bytes")
         r = requests.post(
             "https://api.telegram.org/bot" + TELEGRAM_TOKEN + "/sendPhoto",
-            data={"chat_id": CHAT_ID, "caption": "New Notice: " + title + "\n\nLink: " + pdf_url},
+            data={"chat_id": CHAT_ID, "caption": "New Notice: " + title + "\n\n" + pdf_url},
             files={"photo": ("notice.png", img_bytes, "image/png")}
         )
         print("Photo sent: " + str(r.status_code))
@@ -119,11 +128,11 @@ def save_seen(seen):
 
 
 seen = load_seen()
-notice = get_latest_notice()
+notices = get_latest_notices()
 
-if notice and notice["detail_url"] not in seen:
-    send_notice(notice)
-    seen.add(notice["detail_url"])
-    save_seen(seen)
-else:
-    print("No new notice.")
+for notice in notices:
+    if notice["detail_url"] not in seen:
+        send_notice(notice)
+        seen.add(notice["detail_url"])
+
+save_seen(seen)
