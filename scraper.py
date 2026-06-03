@@ -23,7 +23,7 @@ def get_latest_notices():
     service = Service("/usr/bin/chromedriver")
     driver = webdriver.Chrome(service=service, options=options)
     driver.get("https://www.bubt.edu.bd/notice")
-    WebDriverWait(driver, 15).until(
+    WebDriverWait(driver, 30).until(
         EC.presence_of_element_located((By.TAG_NAME, "table"))
     )
     rows = driver.find_elements(By.CSS_SELECTOR, "table tr")
