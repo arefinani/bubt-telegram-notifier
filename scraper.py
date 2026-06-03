@@ -1,6 +1,7 @@
 import requests
 import json
 import os
+import time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
@@ -19,15 +20,27 @@ def get_latest_notices():
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36")
     options.binary_location = "/usr/bin/chromium-browser"
     service = Service("/usr/bin/chromedriver")
     driver = webdriver.Chrome(service=service, options=options)
+
     driver.get("https://www.bubt.edu.bd/notice")
-    WebDriverWait(driver, 30).until(
-        EC.presence_of_element_located((By.TAG_NAME, "table"))
-    )
+
+    # Wait for page to load then wait extra for JS to render
+    time.sleep(8)
+
+    print("Page title: " + driver.title)
+    print("Page source length: " + str(len(driver.page_source)))
+
     rows = driver.find_elements(By.CSS_SELECTOR, "table tr")
     print("Total rows found: " + str(len(rows)))
+
+    # If no rows found, print page source snippet for debugging
+    if len(rows) == 0:
+        print("DEBUG page source:")
+        print(driver.page_source[:2000])
 
     notices = []
     for row in rows:
@@ -48,9 +61,7 @@ def get_latest_notices():
     for notice in notices:
         try:
             driver.get(notice["detail_url"])
-            WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.TAG_NAME, "body"))
-            )
+            time.sleep(5)
             pdf_url = None
             for a in driver.find_elements(By.TAG_NAME, "a"):
                 href = a.get_attribute("href") or ""
@@ -104,7 +115,7 @@ def send_notice(notice):
         print("Image size: " + str(len(img_bytes)) + " bytes")
         r = requests.post(
             "https://api.telegram.org/bot" + TELEGRAM_TOKEN + "/sendPhoto",
-            data={"chat_id": CHAT_ID, "caption": "New Notice🚨:\n " + title + "\n\n" + pdf_url},
+            data={"chat_id": CHAT_ID, "caption": "New Notice🚨:\n" + title + "\n\n" + pdf_url},
             files={"photo": ("notice.png", img_bytes, "image/png")}
         )
         print("Photo sent: " + str(r.status_code))
