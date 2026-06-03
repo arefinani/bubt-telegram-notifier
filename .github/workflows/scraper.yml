@@ -2,10 +2,10 @@ name: BUBT Notice Scraper
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
-
+    - cron: "0 0 * * *"
   workflow_dispatch:
-
+  repository_dispatch:
+    types: [run-scraper]
   push:
     branches:
       - main
