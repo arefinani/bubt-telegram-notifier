@@ -1,17 +1,14 @@
 name: BUBT Notice Scraper
 
 on:
-  # run automatically every 24 hours
   schedule:
-    - cron: "0 */24 * * *" 
-  
-  # allows to manually run the job at any time
+    - cron: "*/10 * * * *"
+
   workflow_dispatch:
-  
-  # run on every push on the master branch
+
   push:
     branches:
-    - master
+      - main
 
 jobs:
   scrape:
